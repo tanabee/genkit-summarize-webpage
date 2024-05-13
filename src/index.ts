@@ -1,35 +1,51 @@
-import { generate } from '@genkit-ai/ai';
-import { configureGenkit } from '@genkit-ai/core';
-import { defineFlow, startFlowsServer } from '@genkit-ai/flow';
-import { geminiPro } from '@genkit-ai/googleai';
-import * as z from 'zod';
-import { googleAI } from '@genkit-ai/googleai';
+import { defineTool, generate } from "@genkit-ai/ai";
+import { configureGenkit } from "@genkit-ai/core";
+import { defineFlow, startFlowsServer } from "@genkit-ai/flow";
+import { gemini15Pro, googleAI } from "@genkit-ai/googleai";
+import * as cheerio from "cheerio";
+import * as z from "zod";
 
 configureGenkit({
-  plugins: [
-    googleAI(),
-  ],
-  logLevel: 'debug',
+  plugins: [googleAI({ apiVersion: ["v1beta"] })],
+  logLevel: "info",
   enableTracingAndMetrics: true,
 });
 
-export const menuSuggestionFlow = defineFlow(
+const webLoader = defineTool(
   {
-    name: 'menuSuggestionFlow',
+    name: "webLoader",
+    description:
+      "When a URL is received, it accesses the URL and retrieves the content inside.",
+    inputSchema: z.object({ url: z.string() }),
+    outputSchema: z.string(),
+  },
+  async ({ url }) => {
+    const res = await fetch(url);
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    $("script, style, noscript").remove();
+    if ($("article")) {
+      return $("article").text();
+    }
+    return $("body").text();
+  },
+);
+
+export const summarize = defineFlow(
+  {
+    name: "summarize",
     inputSchema: z.string(),
     outputSchema: z.string(),
   },
-  async (subject) => {
+  async (url) => {
     const llmResponse = await generate({
-      prompt: `Suggest an item for the menu of a ${subject} themed restaurant`,
-      model: geminiPro,
-      config: {
-        temperature: 1,
-      },
+      prompt: `First, fetch this link: "${url}". Then, summarize the content within 300 words in Japanese.`,
+      model: gemini15Pro,
+      tools: [webLoader],
+      config: { temperature: 1 },
     });
-
     return llmResponse.text();
-  }
+  },
 );
 
 startFlowsServer();
