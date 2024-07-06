@@ -1,7 +1,7 @@
 import { defineTool, generate } from "@genkit-ai/ai";
 import { configureGenkit } from "@genkit-ai/core";
 import { defineFlow, startFlowsServer } from "@genkit-ai/flow";
-import { gemini15Pro, googleAI } from "@genkit-ai/googleai";
+import { gemini15Flash, googleAI } from "@genkit-ai/googleai";
 import * as cheerio from "cheerio";
 import * as z from "zod";
 
@@ -31,16 +31,16 @@ const webLoader = defineTool(
   },
 );
 
-export const summarize = defineFlow(
+export const mainFlow = defineFlow(
   {
-    name: "summarize",
+    name: "mainFlow",
     inputSchema: z.string(),
     outputSchema: z.string(),
   },
-  async (url) => {
+  async (prompt) => {
     const llmResponse = await generate({
-      prompt: `First, fetch this link: "${url}". Then, summarize the content within 300 words in Japanese.`,
-      model: gemini15Pro,
+      prompt: prompt,
+      model: gemini15Flash,
       tools: [webLoader],
       config: { temperature: 1 },
     });
