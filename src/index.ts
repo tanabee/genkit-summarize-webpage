@@ -1,17 +1,15 @@
-import { defineTool, generate } from "@genkit-ai/ai";
-import { configureGenkit } from "@genkit-ai/core";
-import { defineFlow, startFlowsServer } from "@genkit-ai/flow";
-import { gemini15Flash, googleAI } from "@genkit-ai/googleai";
-import * as cheerio from "cheerio";
-import * as z from "zod";
+import { genkit, z } from 'genkit'
+import { googleAI, gemini15Flash } from '@genkit-ai/googleai'
+import * as cheerio from 'cheerio'
+import { logger } from 'genkit/logging'
+logger.setLogLevel('debug')
 
-configureGenkit({
-  plugins: [googleAI({ apiVersion: ["v1beta"] })],
-  logLevel: "info",
-  enableTracingAndMetrics: true,
-});
+const ai = genkit({
+  plugins: [googleAI()],
+  model: gemini15Flash,
+})
 
-const webLoader = defineTool(
+const webLoader = ai.defineTool(
   {
     name: "webLoader",
     description:
@@ -20,32 +18,26 @@ const webLoader = defineTool(
     outputSchema: z.string(),
   },
   async ({ url }) => {
-    const res = await fetch(url);
-    const html = await res.text();
-    const $ = cheerio.load(html);
-    $("script, style, noscript").remove();
+    const res = await fetch(url)
+    const html = await res.text()
+    const $ = cheerio.load(html)
+    $("script, style, noscript").remove()
     if ($("article")) {
-      return $("article").text();
+      return $("article").text()
     }
-    return $("body").text();
+    return $("body").text()
   },
-);
+)
 
-export const mainFlow = defineFlow(
-  {
-    name: "mainFlow",
-    inputSchema: z.string(),
-    outputSchema: z.string(),
-  },
-  async (prompt) => {
-    const llmResponse = await generate({
-      prompt: prompt,
-      model: gemini15Flash,
-      tools: [webLoader],
-      config: { temperature: 1 },
-    });
-    return llmResponse.text();
-  },
-);
+const mainFlow = ai.defineFlow({
+  name: 'mainFlow',
+  inputSchema: z.string(),
+}, async (input) => {
+  const { text } = await ai.generate({
+    prompt: `First fetch the content of the URL: ${input}. Next, summarize the content in under 200 words.`,
+    tools: [webLoader],
+  })
+  return text
+})
 
-startFlowsServer();
+ai.startFlowServer({ flows: [mainFlow] })
